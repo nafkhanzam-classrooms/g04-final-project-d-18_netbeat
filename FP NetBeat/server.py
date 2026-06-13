@@ -2,142 +2,135 @@ import socket
 import threading
 import json
 import time
-import datetime
 
-HOST = '127.0.0.1'
-PORT = 5025
+# --- CONFIG BINDING SERVER ---
+# Menggunakan '0.0.0.0' agar port terbuka untuk Localhost maupun SSH Tunneling
+SERVER_IP = "0.0.0.0"  
+SERVER_PORT = 5025
 
-rooms = {
+server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server_socket.bind((SERVER_IP, SERVER_PORT))
+server_socket.listen()
+
+print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Dedicated Server NetBeat (State-Driven) aktif di port {SERVER_PORT}...")
+
+# Struktur Data Kamar Terpusat (Global Room Memory)
+rooms_data = {
     "ROOM_01": {
-        "players": {},       
-        "states": {},        
-        "ready": {},         
-        "settings": {"song": "", "speed": 4}
+        "config": {"song": "bidadari.mp3", "speed": 4.5},
+        "players_ready": {"P1": False, "P2": False},
+        "states": {
+            "P1": {"score": 0, "state": "IDLE", "feedback": "", "chat": ""},
+            "P2": {"score": 0, "state": "IDLE", "feedback": "", "chat": ""}
+        },
+        "connections": {"P1": None, "P2": None}
     },
     "ROOM_02": {
-        "players": {},       
-        "states": {},        
-        "ready": {},         
-        "settings": {"song": "", "speed": 4}
+        "config": {"song": "bidadari.mp3", "speed": 4.5},
+        "players_ready": {"P1": False, "P2": False},
+        "states": {
+            "P1": {"score": 0, "state": "IDLE", "feedback": "", "chat": ""},
+            "P2": {"score": 0, "state": "IDLE", "feedback": "", "chat": ""}
+        },
+        "connections": {"P1": None, "P2": None}
     },
     "ROOM_03": {
-        "players": {},       
-        "states": {},        
-        "ready": {},         
-        "settings": {"song": "", "speed": 4}
+        "config": {"song": "bidadari.mp3", "speed": 4.5},
+        "players_ready": {"P1": False, "P2": False},
+        "states": {
+            "P1": {"score": 0, "state": "IDLE", "feedback": "", "chat": ""},
+            "P2": {"score": 0, "state": "IDLE", "feedback": "", "chat": ""}
+        },
+        "connections": {"P1": None, "P2": None}
     }
 }
 
-lock = threading.Lock()
-
-def write_log(message):
-    """📝 FITUR WAJIB: Logging Aktivitas Player"""
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_msg = f"[{timestamp}] {message}"
-    print(log_msg)
-    with open("server_network.log", "a") as f:
-        f.write(log_msg + "\n")
-
-def broadcast_to_room(room_id, data_dict):
-    encoded_data = json.dumps(data_dict).encode('utf-8')
-    with lock:
-        for p_id, p_socket in rooms[room_id]["players"].items():
+def broadcast_to_room(room_id, reply_message):
+    """Memancarkan paket data ke semua player yang ada di dalam satu kamar"""
+    payload = json.dumps(reply_message).encode('utf-8')
+    for p_id, conn in rooms_data[room_id]["connections"].items():
+        if conn:
             try:
-                p_socket.sendall(encoded_data)
+                conn.sendall(payload)
             except:
                 pass
 
-def handle_client(client_socket, p_id, room_id):
-    write_log(f"Player {p_id} terhubung ke {room_id}.")
+def handle_client(conn, player_id, assigned_room):
+    """Thread Mandiri untuk melayani siklus hidup satu Client game"""
+    current_room = assigned_room
+    print(f"[CONNECTED] Player {player_id} terhubung ke kamar {current_room}")
     
-    init_packet = {"type": "INIT_PLAYER", "player_id": p_id}
-    client_socket.sendall(json.dumps(init_packet).encode('utf-8'))
+    # Berikan ID Jaringan Awal ke Client saat tersambung
+    try:
+        conn.sendall(json.dumps({"type": "INIT_PLAYER", "player_id": player_id}).encode('utf-8'))
+    except:
+        return
 
     while True:
         try:
-            data = client_socket.recv(2048)
+            data = conn.recv(2048)
             if not data:
                 break
-            
+                
             message = json.loads(data.decode('utf-8'))
+            room = rooms_data[current_room]
             
-            if message["type"] == "PING":
-                ping_response = {"type": "PONG", "timestamp": message["timestamp"]}
-                client_socket.sendall(json.dumps(ping_response).encode('utf-8'))
-                continue
-
-            if message["type"] == "ROOM_SETUP":
-                target_rm = message["room"]
-                rooms[target_rm]["settings"]["song"] = message["song"]
-                rooms[target_rm]["settings"]["speed"] = message["speed"]
-                write_log(f"{target_rm} diperbarui: {message['song']} | Speed: {message['speed']}")
+            # 1. Logika Sinkronisasi Menu Lagu (Hanya P1/Host yang bisa mengubah)
+            if message["type"] == "ROOM_SETUP" and player_id == "P1":
+                room["config"]["song"] = message["song"]
+                room["config"]["speed"] = message["speed"]
+                reply = {"type": "ROOM_SYNC", "song": message["song"], "speed": message["speed"]}
+                broadcast_to_room(current_room, reply)
                 
-                broadcast_to_room(target_rm, {
-                    "type": "ROOM_SYNC",
-                    "song": message["song"],
-                    "speed": message["speed"]
-                })
-
+            # 2. Logika Kesiapan Matchmaking (Ready Check)
             elif message["type"] == "PLAYER_READY":
-                target_rm = message["room"]
-                rooms[target_rm]["ready"][p_id] = message["is_ready"]
-                write_log(f"[{target_rm}] Player {p_id} status Ready = {message['is_ready']}")
-                
-                if len(rooms[target_rm]["players"]) == 2 and all(rooms[target_rm]["ready"].values()):
-                    write_log(f"Matchmaking selesai. {target_rm} memulai permainan!")
-                    broadcast_to_room(target_rm, {"type": "START_MATCH"})
-
+                room["players_ready"][player_id] = message["is_ready"]
+                # Jika kedua pemain sudah menekan tombol READY, trigger mulai pertandingan
+                if room["players_ready"]["P1"] and room["players_ready"]["P2"]:
+                    broadcast_to_room(current_room, {"type": "START_MATCH"})
+            
+            # 3. Logika Pertukaran Status Real-Time Game (Core Game Loop Sinkronisasi)
             elif message["type"] == "GAME_UPDATE":
-                added_score = message["added_score"]
-                if added_score > 1000:
-                    write_log(f"[⚠️ CHEAT DETECTED] {p_id} mengirim paket skor tidak valid ({added_score})! Paket dibuang.")
-                    continue
+                room["states"][player_id]["score"] = message["added_score"]
+                room["states"][player_id]["state"] = message["state"]
+                room["states"][player_id]["feedback"] = message["feedback"]
+                room["states"][player_id]["chat"] = message["chat"]
                 
-                rooms[room_id]["states"][p_id]["score"] += added_score
-                rooms[room_id]["states"][p_id]["state"] = message["state"]
-                rooms[room_id]["states"][p_id]["feedback"] = message["feedback"]
-                if "chat" in message:
-                    rooms[room_id]["states"][p_id]["chat"] = message["chat"]
+                # Balas langsung dengan menyiarkan potret panggung dansa global terkini
+                reply = {"type": "REALTIME_STATE", "states": room["states"]}
+                broadcast_to_room(current_room, reply)
                 
-                broadcast_to_room(room_id, {
-                    "type": "REALTIME_STATE",
-                    "states": rooms[room_id]["states"]
-                })
-
-        except Exception as e:
+            # 4. Logika Mekanisme Detak Jantung Jaringan (PING-PONG)
+            elif message["type"] == "PING":
+                conn.sendall(json.dumps({"type": "PONG", "timestamp": message["timestamp"]}).encode('utf-8'))
+                
+        except:
             break
 
-    with lock:
-        if p_id in rooms[room_id]["players"]: del rooms[room_id]["players"][p_id]
-        if p_id in rooms[room_id]["states"]: del rooms[room_id]["states"][p_id]
-        if p_id in rooms[room_id]["ready"]: del rooms[room_id]["ready"][p_id]
+    # PENANGANAN EROR / CLIENT LOGOUT (Fault Tolerance)
+    print(f"[DISCONNECTED] Player {player_id} keluar dari kamar {current_room}")
+    rooms_data[current_room]["connections"][player_id] = None
+    rooms_data[current_room]["players_ready"][player_id] = False
+    rooms_data[current_room]["states"][player_id] = {"score": 0, "state": "IDLE", "feedback": "", "chat": ""}
+    broadcast_to_room(current_room, {"type": "OPPONENT_DISCONNECTED"})
+    conn.close()
+
+# Loop Utama Matchmaking Alokasi Slot Kamar Otomatis
+while True:
+    conn, addr = server_socket.accept()
+    allocated = False
+    for r_name, r_content in rooms_data.items():
+        if r_content["connections"]["P1"] is None:
+            r_content["connections"]["P1"] = conn
+            threading.Thread(target=handle_client, args=(conn, "P1", r_name), daemon=True).start()
+            allocated = True
+            break
+        elif r_content["connections"]["P2"] is None:
+            r_content["connections"]["P2"] = conn
+            threading.Thread(target=handle_client, args=(conn, "P2", r_name), daemon=True).start()
+            allocated = True
+            break
             
-    client_socket.close()
-    write_log(f"Player {p_id} terputus dari jaringan {room_id}. Slot dibersihkan.")
-    broadcast_to_room(room_id, {"type": "OPPONENT_DISCONNECTED"})
-
-def main_server():
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server.bind((HOST, PORT))
-    server.listen(4)
-    write_log(f"Dedicated Server NetBeat aktif di {HOST}:{PORT}. Menunggu matchmaking...")
-
-    player_count = 1
-    while True:
-        conn, addr = server.accept()
-        room_id = "ROOM_01"  
-        p_id = f"P{player_count}"
-        
-        with lock:
-            rooms[room_id]["players"][p_id] = conn
-            rooms[room_id]["states"][p_id] = {"score": 0, "state": "IDLE", "feedback": "", "chat": ""}
-            rooms[room_id]["ready"][p_id] = False
-
-        thread = threading.Thread(target=handle_client, args=(conn, p_id, room_id))
-        thread.daemon = True
-        thread.start()
-        player_count += 1
-
-if __name__ == "__main__":
-    main_server()
+    if not allocated:
+        conn.sendall(json.dumps({"type": "SERVER_FULL"}).encode('utf-8'))
+        conn.close()
