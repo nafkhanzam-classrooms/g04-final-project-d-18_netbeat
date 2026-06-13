@@ -7,26 +7,34 @@ import json
 import time
 import scenes
 from gameplay import GameplayManager
-SERVER_IP = '127.0.0.1'
+
+# 🛠️ TRICK ANTI-FREEZE: Memaksa Pygame tetap merender game meskipun layarnya tidak fokus/di-minimize
+os.environ['SDL_VIDEO_ALLOW_BACKGROUNDING'] = '1'
+
+# --- CONFIG JARINGAN CLIENT ---
+# Silakan ganti nilai SERVER_IP ke domain '.lhr.life' yang keluar di terminal SSH kamu!
+SERVER_IP = '127.0.0.1'  
 SERVER_PORT = 5025
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+# Penanda Status Sinkronisasi
 my_network_id = "P1"
 is_connected = False
 current_latency = "0 ms"
 net_game_start_trigger = False
 opponent_disconnected_alert = False
 
-# Pilihan Room Bebas
 rooms_list = ["ROOM_01", "ROOM_02", "ROOM_03"]
 selected_room_idx = 0
 
+# Penampung Objek Sinkronisasi Status (Dicopy dari Struktur Data Server)
 network_states = {
     "P1": {"score": 0, "state": "IDLE", "feedback": "", "chat": ""},
     "P2": {"score": 0, "state": "IDLE", "feedback": "", "chat": ""}
 }
 
 def network_receiver():
-    """🔄 FITUR WAJIB: Real-time Update Receiver Thread"""
+    """🔄 BACKGROUND THREAD RECEIVER: Mengambil data konstan dari server tanpa nge-lag"""
     global my_network_id, current_latency, net_game_start_trigger
     global songs_list, selected_song_idx, selected_diff_idx, network_states, opponent_disconnected_alert
     
@@ -57,6 +65,7 @@ def network_receiver():
                 
             elif message["type"] == "START_MATCH":
                 net_game_start_trigger = True
+                opponent_disconnected_alert = False
                 
             elif message["type"] == "OPPONENT_DISCONNECTED":
                 opponent_disconnected_alert = True
@@ -64,6 +73,7 @@ def network_receiver():
         except:
             break
 
+# Eksekusi Up-Link Jaringan
 try:
     client_socket.connect((SERVER_IP, SERVER_PORT))
     is_connected = True
@@ -86,6 +96,8 @@ def load_img(filename, size):
     path = os.path.join("Image", filename)
     img = pygame.image.load(path).convert_alpha()
     return pygame.transform.scale(img, size)
+
+# --- INVENTARISASI ASET GAMBAR ---
 arrow_images = {
     "LEFT": load_img("arrow-left.png", (60, 60)), "RIGHT": load_img("arrow-right.png", (60, 60)),
     "UP": load_img("arrow-up.png", (60, 60)), "DOWN": load_img("arrow-down.png", (60, 60))
@@ -94,7 +106,6 @@ character_images = {
     "IDLE": load_img("man.png", (160, 260)), "DANCING": load_img("man dancing.png", (160, 260)), "MISS": load_img("man miss.png", (160, 260))
 }
 
-# Load Background Menu Utama & Background Per Room Kamar
 bg_utama = load_img("bgutama.png", (1280, 720))
 room_backgrounds = {
     "ROOM_01": load_img("bg1.png", (1280, 720)),
@@ -126,14 +137,15 @@ def play_menu_music():
         pass
 
 play_menu_music()
-
 clock = pygame.time.Clock()
 running = True
 
+# --- CORE GAME LOOP RESMI ---
 while running:
     clock.tick(60)
     mouse_pos = pygame.mouse.get_pos()
     
+    # Detak Jantung Pemantau Latensi (PING)
     if is_connected:
         ping_heartbeat_timer += 1
         if ping_heartbeat_timer >= 120:  
@@ -144,6 +156,8 @@ while running:
                 is_connected = False
 
     active_bg = room_backgrounds[rooms_list[selected_room_idx]]
+
+    # [SCENE 1: MAIN MENU]
     if current_scene == "MAIN_MENU":
         for event in pygame.event.get():
             if event.type == pygame.QUIT: running = False
@@ -159,6 +173,7 @@ while running:
                     if len(player_name) < 12 and event.unicode.isalnum(): player_name += event.unicode
         scenes.draw_main_menu(screen, mouse_pos, player_name, input_active, bg_utama)
 
+    # [SCENE 2: CREATE ROOM CONFIGURATION]
     elif current_scene == "CREATE_ROOM":
         for event in pygame.event.get():
             if event.type == pygame.QUIT: running = False
@@ -189,6 +204,8 @@ while running:
                 if 490 <= mouse_pos[0] <= 790 and 560 <= mouse_pos[1] <= 610: current_scene = "LOBBY"
                 if 490 <= mouse_pos[0] <= 790 and 630 <= mouse_pos[1] <= 670: current_scene = "MAIN_MENU"
         scenes.draw_create_room_menu(screen, mouse_pos, songs_list, selected_song_idx, diff_list, selected_diff_idx, rooms_list, selected_room_idx, my_network_id, active_bg)
+
+    # [SCENE 3: LOBBY MATCHMAKING]
     elif current_scene == "LOBBY":
         if net_game_start_trigger:
             net_game_start_trigger = False
@@ -225,6 +242,7 @@ while running:
         
         scenes.draw_lobby(screen, mouse_pos, player_name, character_images["IDLE"], songs_list[selected_song_idx], diff_list[selected_diff_idx], is_ready_lobby, my_network_id, is_connected, rooms_list[selected_room_idx], active_bg)
 
+    # [SCENE 4: IN-GAME MULTIPLAYER ARENA]
     elif current_scene == "GAMEPLAY":
         for event in pygame.event.get():
             if event.type == pygame.QUIT: running = False
@@ -240,9 +258,10 @@ while running:
             if game_status == "SONG_ENDED": pygame.mixer.music.stop()
             gameplay_manager.draw(screen, player_name, network_states)
 
+    # Render Pojok Kanan Atas Nilai Ping Latensi RTT Aktual
     if is_connected:
         txt_ping_disp = f_small.render(f"Ping: {current_latency}", True, GREEN)
-        screen.blit(txt_ping_disp, (1150, 690))
+        screen.blit(txt_ping_disp, (1130, 25))
 
     pygame.display.flip()
 
