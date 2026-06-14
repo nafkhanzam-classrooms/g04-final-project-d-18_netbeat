@@ -88,21 +88,21 @@ python main.py
 ```
 .
 └── NetBeat/
-    ├── server.py              # *Dedicated game server* (TCP, *multi-threading*)
-    ├── main.py                # *Entry point client & game loop*
-    ├── scenes.py              # *Rendering* menu, *room config*, *lobby*
-    ├── gameplay.py            # Logika & *rendering gameplay* inti
-    ├── server_network.log     # *Log* aktivitas *server* (*auto-generated*)
-    ├── Image/                 # *Asset* gambar (wajib ada di *root*)
-    ├── Song/                  # *Asset* musik (wajib ada di *root*)
-    └── pycache/               # *Compiled Python bytecode* (*auto-generated*, *git ignore*)
+    ├── server.py              # Dedicated game server (TCP, multi-threading)
+    ├── main.py                # Entry point client & game loop
+    ├── scenes.py              # Rendering menu, room config, lobby
+    ├── gameplay.py            # Logika & rendering gameplay inti
+    ├── server_network.log     # Log aktivitas server (auto-generated)
+    ├── Image/                 # Asset gambar (wajib ada di root)
+    ├── Song/                  # Asset musik (wajib ada di root)
+    └── pycache/               # Compiled Python bytecode (auto-generated, git ignore)
       ├── gameplay.cpython-313.pyc
       └── scenes.cpython-313.pyc
 ```
 
 ## 🎥 Video Demo
 
-[Link video demo](https://youtu.be/j8xozjCvX4s)
+[Tautan YouTube video demo](https://youtu.be/j8xozjCvX4s)
 
 ## 📄 Laporan
 
