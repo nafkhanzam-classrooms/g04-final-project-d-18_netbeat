@@ -100,7 +100,7 @@ python main.py
 
 ## 🎥 Video Demo
 
-[Link video demo](#)
+[Link video demo](https://youtu.be/j8xozjCvX4s)
 
 ## 📄 Laporan
 
