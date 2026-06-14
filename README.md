@@ -50,7 +50,7 @@ secara *real-time* ke lawan melalui *server*.
 
 ## 🚀 Cara Menjalankan
 
-### *Requirements*
+### Requirements
 ```bash
 pip install pygame
 ```
@@ -65,7 +65,7 @@ python server.py
 ```bash
 python main.py
 ```
-```
+
 > Jika *client* dijalankan di perangkat berbeda dari *server*, ubah `SERVER_IP` 
 > di `main.py` menjadi IP *address* *server*.
 
@@ -98,10 +98,6 @@ python main.py
     └── pycache/               # *Compiled Python bytecode* (*auto-generated*, *git ignore*)
       ├── gameplay.cpython-313.pyc
       └── scenes.cpython-313.pyc
-└── docs/
-    ├── Laporan_NetBeat.pdf
-    └── screenshot_*.png
-└── README.md
 ```
 
 ## 🎥 Video Demo
