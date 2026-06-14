@@ -38,7 +38,7 @@ secara real-time ke lawan melalui server.
 
 | Main Menu | Lobby | Gameplay |
 |---|---|---|
-| ![menu](docs/screenshot_menu.png) | ![lobby](docs/screenshot_lobby.png) | ![gameplay](docs/screenshot_gameplay.png) |
+| ![menu](docs/Screenshot_menu.png) | ![lobby](docs/Screenshot_lobby.png) | ![gameplay](docs/Screenshot_gameplay.png) |
 
 ## 🏗️ Arsitektur & Protokol
 
